@@ -1,18 +1,29 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'TP AWS Lambda - Filtrage images et gestion doublons DynamoDB'
+Description: 'TP AWS Lambda - Finalisation avec Table Unique et Filtre Image'
 
 Parameters:
   Environment:
     Type: String
-    Description: 'Nom de l’environnement'
+    Description: 'Votre identifiant (ex: kadeoul)'
     Default: 'kadeoul'
   BucketName:
     Type: String
-    Description: 'Nom du bucket S3'
+    Description: 'Suffixe du bucket S3'
     Default: 's3-bucket-trigger-lambda'
 
 Resources:
-  # Rôle IAM pour la fonction Lambda
+  MyDynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${Environment}-s3-trigger-db'
+      AttributeDefinitions:
+        - AttributeName: 'id'
+          AttributeType: 'S'
+      KeySchema:
+        - AttributeName: 'id'
+          KeyType: 'HASH'
+      BillingMode: PAY_PER_REQUEST
+
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -28,24 +39,17 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole 
       Policies:
-        - PolicyName: !Sub '${Environment}-LambdaS3AccessPolicy'
+        - PolicyName: !Sub '${Environment}-LambdaAccessPolicy'
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              # Accès à DynamoDB (Lecture pour vérifier l'existence + Écriture)
+              # Autorise la Lambda à lire et écrire UNIQUEMENT dans TA table
               - Effect: Allow
                 Action: 
                   - dynamodb:PutItem
                   - dynamodb:GetItem
-                Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/s3-trigger-db'
-              
-              # Accès S3 (Limité pour éviter les boucles, mais nécessaire pour la lecture d'infos si besoin)
-              - Effect: Allow
-                Action:
-                  - s3:GetBucketNotification
-                Resource: !Sub 'arn:aws:s3:::${Environment}-${BucketName}'
+                Resource: !GetAtt MyDynamoDBTable.Arn
 
-  # Fonction Lambda
   LambdaTrigger:
     Type: AWS::Lambda::Function
     Properties:
@@ -56,10 +60,9 @@ Resources:
       Code: src/
       Environment:
         Variables:
-          DYNAMODB_TABLE: 's3-trigger-db'
+          DYNAMODB_TABLE: !Ref MyDynamoDBTable
           AWS_REGION_NAME: !Ref AWS::Region
 
-  # Permission pour que S3 invoque la Lambda
   LambdaPermissionForS3:
     Type: AWS::Lambda::Permission
     Properties:
@@ -68,7 +71,6 @@ Resources:
       Principal: s3.amazonaws.com
       SourceArn: !Sub 'arn:aws:s3:::${Environment}-${BucketName}'
 
-  # Bucket S3 avec FILTRE pour les images
   S3Bucket:
     Type: AWS::S3::Bucket
     DependsOn: LambdaPermissionForS3
@@ -82,4 +84,4 @@ Resources:
               S3Key:
                 Rules:
                   - Name: suffix
-                    Value: .jpg # Filtre pour accepter uniquement les .jpg
+                    Value: .jpg 

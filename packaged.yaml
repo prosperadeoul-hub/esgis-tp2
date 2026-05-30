@@ -1,17 +1,27 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: TP AWS Lambda - Code chargé depuis src/main.py
+Description: TP AWS Lambda - Finalisation avec Table Unique et Filtre Image
 Parameters:
   Environment:
     Type: String
-    Description: Nom de l’environnement (e.g. votre identifiant sans le 
-      learnaws)
+    Description: 'Votre identifiant (ex: kadeoul)'
     Default: kadeoul
   BucketName:
     Type: String
-    Description: Nom du bucket S3 (e.g. votre identifiant sans le learnaws + 
-      -bucket)
+    Description: Suffixe du bucket S3
     Default: s3-bucket-trigger-lambda
 Resources:
+  MyDynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName:
+        Fn::Sub: ${Environment}-s3-trigger-db
+      AttributeDefinitions:
+      - AttributeName: id
+        AttributeType: S
+      KeySchema:
+      - AttributeName: id
+        KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -28,21 +38,18 @@ Resources:
       - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
       - PolicyName:
-          Fn::Sub: ${Environment}-LambdaS3AccessPolicy
+          Fn::Sub: ${Environment}-LambdaAccessPolicy
         PolicyDocument:
           Version: '2012-10-17'
           Statement:
-          - Effect: Deny
-            Action:
-            - s3:GetObject
-            - s3:PutObject
-            Resource:
-              Fn::Sub: arn:aws:s3:::${Environment}-${BucketName}/*
           - Effect: Allow
             Action:
             - dynamodb:PutItem
             - dynamodb:GetItem
-            Resource: arn:aws:dynamodb:*:*:table/s3-trigger-db
+            Resource:
+              Fn::GetAtt:
+              - MyDynamoDBTable
+              - Arn
   LambdaTrigger:
     Type: AWS::Lambda::Function
     Properties:
@@ -56,10 +63,13 @@ Resources:
       Runtime: python3.12
       Code:
         S3Bucket: iabd-sourcecode-management-bucket
-        S3Key: 6b69f1546a270e359e472152554f5e42
+        S3Key: 78a6942f02e0eba279586f07a6611fa6
       Environment:
         Variables:
-          DYNAMODB_TABLE: s3-trigger-db
+          DYNAMODB_TABLE:
+            Ref: MyDynamoDBTable
+          AWS_REGION_NAME:
+            Ref: AWS::Region
   LambdaPermissionForS3:
     Type: AWS::Lambda::Permission
     Properties:
@@ -82,3 +92,8 @@ Resources:
             Fn::GetAtt:
             - LambdaTrigger
             - Arn
+          Filter:
+            S3Key:
+              Rules:
+              - Name: suffix
+                Value: .jpg
