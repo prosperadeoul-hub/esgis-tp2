@@ -1,0 +1,84 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: TP AWS Lambda - Code chargé depuis src/main.py
+Parameters:
+  Environment:
+    Type: String
+    Description: Nom de l’environnement (e.g. votre identifiant sans le 
+      learnaws)
+    Default: kadeoul
+  BucketName:
+    Type: String
+    Description: Nom du bucket S3 (e.g. votre identifiant sans le learnaws + 
+      -bucket)
+    Default: s3-bucket-trigger-lambda
+Resources:
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+      - PolicyName:
+          Fn::Sub: ${Environment}-LambdaS3AccessPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Deny
+            Action:
+            - s3:GetObject
+            - s3:PutObject
+            Resource:
+              Fn::Sub: arn:aws:s3:::${Environment}-${BucketName}/*
+          - Effect: Allow
+            Action:
+            - dynamodb:PutItem
+            - dynamodb:GetItem
+            Resource: arn:aws:dynamodb:*:*:table/s3-trigger-db
+  LambdaTrigger:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-lambda-trigger
+      Handler: main.lambda_handler
+      Role:
+        Fn::GetAtt:
+        - LambdaExecutionRole
+        - Arn
+      Runtime: python3.12
+      Code:
+        S3Bucket: iabd-sourcecode-management-bucket
+        S3Key: 6b69f1546a270e359e472152554f5e42
+      Environment:
+        Variables:
+          DYNAMODB_TABLE: s3-trigger-db
+  LambdaPermissionForS3:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName:
+        Ref: LambdaTrigger
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceArn:
+        Fn::Sub: arn:aws:s3:::${Environment}-${BucketName}
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    DependsOn: LambdaPermissionForS3
+    Properties:
+      BucketName:
+        Fn::Sub: ${Environment}-${BucketName}
+      NotificationConfiguration:
+        LambdaConfigurations:
+        - Event: s3:ObjectCreated:*
+          Function:
+            Fn::GetAtt:
+            - LambdaTrigger
+            - Arn
