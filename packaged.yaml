@@ -3,7 +3,7 @@ Description: TP AWS Lambda - Finalisation avec Table Unique et Filtre Image
 Parameters:
   Environment:
     Type: String
-    Description: 'Votre identifiant (ex: kadeoul)'
+    Description: Votre identifiant
     Default: kadeoul
   BucketName:
     Type: String
@@ -63,7 +63,7 @@ Resources:
       Runtime: python3.12
       Code:
         S3Bucket: iabd-sourcecode-management-bucket
-        S3Key: 78a6942f02e0eba279586f07a6611fa6
+        S3Key: 3169cd6469d700eccd44ec87e92072f4
       Environment:
         Variables:
           DYNAMODB_TABLE:

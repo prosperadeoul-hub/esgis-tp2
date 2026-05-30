@@ -4,7 +4,7 @@ Description: 'TP AWS Lambda - Finalisation avec Table Unique et Filtre Image'
 Parameters:
   Environment:
     Type: String
-    Description: 'Votre identifiant (ex: kadeoul)'
+    Description: 'Votre identifiant'
     Default: 'kadeoul'
   BucketName:
     Type: String
@@ -12,6 +12,7 @@ Parameters:
     Default: 's3-bucket-trigger-lambda'
 
 Resources:
+  # 1. TA TABLE DYNAMODB UNIQUE
   MyDynamoDBTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -24,6 +25,7 @@ Resources:
           KeyType: 'HASH'
       BillingMode: PAY_PER_REQUEST
 
+  # 2. RÔLE IAM
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -43,13 +45,13 @@ Resources:
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              # Autorise la Lambda à lire et écrire UNIQUEMENT dans TA table
               - Effect: Allow
                 Action: 
                   - dynamodb:PutItem
                   - dynamodb:GetItem
                 Resource: !GetAtt MyDynamoDBTable.Arn
 
+  # 3. FONCTION LAMBDA
   LambdaTrigger:
     Type: AWS::Lambda::Function
     Properties:
@@ -63,6 +65,7 @@ Resources:
           DYNAMODB_TABLE: !Ref MyDynamoDBTable
           AWS_REGION_NAME: !Ref AWS::Region
 
+  # 4. PERMISSION S3
   LambdaPermissionForS3:
     Type: AWS::Lambda::Permission
     Properties:
@@ -71,6 +74,7 @@ Resources:
       Principal: s3.amazonaws.com
       SourceArn: !Sub 'arn:aws:s3:::${Environment}-${BucketName}'
 
+  # 5. BUCKET S3 AVEC FILTRE JPG
   S3Bucket:
     Type: AWS::S3::Bucket
     DependsOn: LambdaPermissionForS3
@@ -84,4 +88,4 @@ Resources:
               S3Key:
                 Rules:
                   - Name: suffix
-                    Value: .jpg 
+                    Value: .jpg
